@@ -8,39 +8,15 @@ import java.util.TimerTask;
 public class SendChat {
 	
 	static int alertTimes;
-	static int messagesScheduled = -1;
+	static int messagesScheduled = 0;
 	static int messageWaitSec = 2;
 	static Timer messageTimer = new Timer();
 	
-	static void wantedAlert(final String wantedName, final String crime, int secBetween, final int timesRepeat)
-	{
-		final Timer alertTimer = new Timer();
-		alertTimer.scheduleAtFixedRate(new TimerTask()
-		{
-			int repeatTimes = timesRepeat;
-			@Override
-			public void run()
-			{
-				if (repeatTimes > 0)
-				{
-					addMessageQueue("Alert: " + wantedName + " is wanted for " + crime);
-/*					System.out.println("[PoliceBot] wantedAlert repeat times is " + repeatTimes);
-					Minecraft.getMinecraft().thePlayer.sendChatMessage("ALERT: " + wantedName + " is wanted for " + crime);
-					repeatTimes--;
-*/				}
-				else
-				{
-					System.out.println("[PoliceBot] ending alertTimer");
-					alertTimer.cancel();
-					alertTimer.purge();
-				}
-			}
-		}, 0, secBetween*1000);
-	}
-	
+	//Puts messages for chat in a queue separated by messageWaitSec to avoid spamming the server
 	static void addMessageQueue(final String message)
 	{
 		messagesScheduled++;
+		System.out.println("[PoliceBot] Messages scheduled in queue: " + messagesScheduled);
 		messageTimer.schedule(new TimerTask()
 		{
 			@Override
@@ -48,6 +24,7 @@ public class SendChat {
 			{
 				Minecraft.getMinecraft().thePlayer.sendChatMessage(message);
 				messagesScheduled--;
+				System.out.println("[PoliceBot] Messages scheduled in queue: " + messagesScheduled);
 			}
 		}, messagesScheduled * messageWaitSec * 1000);
 	}
