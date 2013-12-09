@@ -16,7 +16,7 @@ public class SendChat {
 	static void addMessageQueue(final String message)
 	{
 		messagesScheduled++;
-		System.out.println("[PoliceBot] Messages scheduled in queue: " + messagesScheduled);
+//		System.out.println("[PoliceBot] Messages scheduled in queue: " + messagesScheduled);
 		messageTimer.schedule(new TimerTask()
 		{
 			@Override
@@ -24,7 +24,7 @@ public class SendChat {
 			{
 				Minecraft.getMinecraft().thePlayer.sendChatMessage(message);
 				messagesScheduled--;
-				System.out.println("[PoliceBot] Messages scheduled in queue: " + messagesScheduled);
+//				System.out.println("[PoliceBot] Messages scheduled in queue: " + messagesScheduled)
 			}
 		}, messagesScheduled * messageWaitSec * 1000);
 	}

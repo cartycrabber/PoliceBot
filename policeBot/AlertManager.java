@@ -10,6 +10,9 @@ import java.util.TimerTask;
 
 public class AlertManager 
 {
+	static List<String> alertsRunning = new ArrayList<String>();
+	static TimerTask alertTask;
+	
 	static void createAlert(String alertPerp, String alertCrime) throws Exception
 	{
 		BufferedReader AlertsReader = new BufferedReader(new FileReader(policeBot.PoliceBot.settingsDir + "\\alerts\\wantedAlerts.txt"));
@@ -21,9 +24,10 @@ public class AlertManager
 		AlertsWriter.close();
 	}
 	
-	static void wantedAlert(int alertID, int secBetween, final int timesRepeat) throws Exception
+	static void wantedAlert(final String alertPerp, final String alertCrime, int minBetween, final int timesRepeat) throws Exception
 	{
-		BufferedReader AlertsReader = new BufferedReader(new FileReader(policeBot.PoliceBot.settingsDir + "\\alerts\\wantedAlerts.txt"));
+		alertsRunning.add("wanted_" + alertPerp);
+/*		BufferedReader AlertsReader = new BufferedReader(new FileReader(policeBot.PoliceBot.settingsDir + "\\alerts\\wantedAlerts.txt"));
 		List<String> wantedAlertsList = new ArrayList<String>();
 		String line = null;
 		while ((line = AlertsReader.readLine()) != null)
@@ -33,27 +37,81 @@ public class AlertManager
 		AlertsReader.close();
 		String alertInfo = wantedAlertsList.get(alertID);
 		String alertInfoArr[] = alertInfo.split(",");
-		final String alertPerp = alertInfoArr[2];
-		final String alertCrime = alertInfoArr[3];
-		final Timer alertTimer = new Timer();
-		alertTimer.scheduleAtFixedRate(new TimerTask()
+		final String alertPerp = alertInfoArr[1];
+		final String alertCrime = alertInfoArr[2];
+*/		final Timer wantedTimer = new Timer();
+		wantedTimer.scheduleAtFixedRate(alertTask = new TimerTask()
 		{
 			int repeatTimes = timesRepeat;
 			@Override
 			public void run()
 			{
-				if (repeatTimes > 0)
+				if (alertsRunning.contains("wanted_" + alertPerp))
 				{
-					policeBot.SendChat.addMessageQueue("ALERT: " + alertPerp + " is wanted for " + alertCrime);
+					policeBot.SendChat.addMessageQueue("Alert: " + alertPerp + " is wanted for " + alertCrime);
 					repeatTimes--;
+					if (repeatTimes <= 0)
+					{
+						for (int i = 0; i < alertsRunning.size(); i++)
+						{
+							if (alertsRunning.get(i).equals("snitchDetect_" + alertPerp))
+							{
+								alertsRunning.remove(i);
+								break;
+							}
+							wantedTimer.cancel();
+							wantedTimer.purge();
+						}
+					}
 				}
 				else
 				{
-					System.out.println("[PoliceBot] ending alertTimer");
-					alertTimer.cancel();
-					alertTimer.purge();
+					wantedTimer.cancel();
+					wantedTimer.purge();
 				}
 			}
-		}, 0, secBetween*1000);
+		}, 0, minBetween * 60 * 1000);
+	}
+	
+	static void nearbyAlert(final String alertPerp, int minBetween, final int timesRepeat)
+	{
+		alertsRunning.add("snitchDetect_" + alertPerp);
+		final Timer nearbyTimer = new Timer();
+		nearbyTimer.scheduleAtFixedRate(alertTask = new TimerTask()
+		{
+			int repeatTimes = timesRepeat;
+			@Override
+			public void run()
+			{
+				if (alertsRunning.contains("snitchDetect_" + alertPerp))
+				{
+					policeBot.SendChat.addMessageQueue("Alert: The criminal " + alertPerp + " is in Orion");
+					repeatTimes--;
+					if (repeatTimes <= 0)
+					{
+						for (int i = 0; i < alertsRunning.size(); i++)
+						{
+							if (alertsRunning.get(i).equals("snitchDetect_" + alertPerp))
+							{
+								alertsRunning.remove(i);
+								break;
+							}
+							nearbyTimer.cancel();
+							nearbyTimer.purge();
+						}
+					}
+				}
+				else
+				{
+					nearbyTimer.cancel();
+					nearbyTimer.purge();
+				}
+			}
+		}, 0, minBetween * 60 * 1000);
+	}
+	
+	void stopAlert()
+	{
+		
 	}
 }
