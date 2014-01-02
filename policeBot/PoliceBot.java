@@ -5,19 +5,24 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.Calendar;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ChatMessageComponent;
 import net.minecraftforge.client.event.ClientChatReceivedEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.ForgeSubscribe;
+import cpw.mods.fml.client.FMLClientHandler;
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.Mod.EventHandler;
@@ -25,7 +30,7 @@ import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.network.NetworkMod;
 import cpw.mods.fml.relauncher.Side;
 
-@Mod(modid = PoliceBot.modid, name = "Police Bot", version = "0.4")
+@Mod(modid = PoliceBot.modid, name = "Police Bot", version = "1.0")
 @NetworkMod(clientSideRequired = true, serverSideRequired = false)
 public class PoliceBot
 {
@@ -35,24 +40,33 @@ public class PoliceBot
 	public String username;
 	public String message;
 	static String settingsDir;
+	String loggerUsername;
 	int snitchAlertBetween = 5;
 	int snitchAlertRepeat = 3;
 	int snitchDetectCooldown = (snitchAlertBetween * snitchAlertRepeat) - snitchAlertBetween;
+	int messageStartPlace;
 	TimerTask detectionTask;
 	String line;
 	File watchListFile;
 	File chatLogFile;
 	File blacklistFile;
 	File tempFile;
+	File logFile;
+	File announcementsFile;
+	File permissionsFile;
 	static List<String> detectedList = new ArrayList<String>();
-	List<String> botPermissions = Arrays.asList("cartycrabber", "baconater88", "konvexon", "itaqi");
+	String[] userChat;
+	List<String> botPermissions = new ArrayList<String>();
 	List<String> botPermBlacklist = new ArrayList<String>();
 	List<String> watchList = new ArrayList<String>();
 	static List<String[]> alertList = new ArrayList<String[]>();
 	String alertName;
 	String alertPerp;
 	String alertCrime;
-	SimpleDateFormat sdf = new SimpleDateFormat("[MM/dd/yy][HH:mm:ss]");
+	Date date = new Date();
+	SimpleDateFormat dayFormat = new SimpleDateFormat("MM-dd-yy");
+	SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
+	String currentDate = dayFormat.format(date);
 	
 	@EventHandler
 	public void load(FMLInitializationEvent event) throws Exception
@@ -62,86 +76,119 @@ public class PoliceBot
 		{
 			settingsDir = (System.getenv("APPDATA") + "\\.minecraft\\mods\\PoliceBot");
 			new File(settingsDir).mkdirs();
-			new File(settingsDir + "\\alerts").mkdirs();
+			new File(settingsDir + "\\Chat Logs").mkdirs();
 		}
 		watchListFile = new File(settingsDir + "\\WatchList.txt");
-		chatLogFile = new File(settingsDir + "\\ChatLog.txt");
+		chatLogFile = new File(settingsDir + "\\Chat Logs\\" + currentDate + ".txt");
 		blacklistFile = new File(settingsDir + "\\Blacklist.txt");
+		logFile = new File(settingsDir + "\\Log.txt");
+		announcementsFile = new File(settingsDir + "\\announcements.txt");
+		permissionsFile = new File(settingsDir + "\\Permissions.txt");
+		System.out.println("[PoliceBot]" + chatLogFile.toString());
 		if (!watchListFile.exists())
 			watchListFile.createNewFile();
 		if (!chatLogFile.exists())
 			chatLogFile.createNewFile();
 		if (!blacklistFile.exists())
 			blacklistFile.createNewFile();
+		if (!logFile.exists())
+			logFile.createNewFile();
+		if (!announcementsFile.exists())
+			announcementsFile.createNewFile();
+		if (!permissionsFile.exists())
+			permissionsFile.createNewFile();
 	}
-
 	@ForgeSubscribe
 	public void onChatReceived(ClientChatReceivedEvent event) throws Exception
 	{
 //		System.out.println("[PoliceBot] Received chat");
-		FileWriter chatLogger = new FileWriter(settingsDir + "\\ChatLog.txt", true);
+		chatLogFile = new File(settingsDir + "\\Chat Logs\\" + currentDate + ".txt");
+		if (!chatLogFile.exists())
+			chatLogFile.createNewFile();
+		FileWriter chatLogger = new FileWriter(chatLogFile, true);
+		BufferedReader permissionReader = new BufferedReader(new FileReader(permissionsFile));
+		botPermissions.clear();
+		while ((line = permissionReader.readLine()) != null)
+			if (!botPermissions.contains(line))
+				botPermissions.add(line);
+		permissionReader.close();
 		botPermBlacklist.clear();
-		BufferedReader BlacklistReader = new BufferedReader(new FileReader(policeBot.PoliceBot.settingsDir + "\\Blacklist.txt"));
+		BufferedReader BlacklistReader = new BufferedReader(new FileReader(blacklistFile));
 		while ((line = BlacklistReader.readLine()) != null)
 			if (!botPermBlacklist.contains(line))
-				botPermBlacklist.add(line);
+				botPermBlacklist.add(line.toLowerCase());
 		BlacklistReader.close();
 		String rawChat = event.message;
-//		FileWriter out = new FileWriter("C:\\Users\\Will\\Documents\\Development\\PoliceBotOutput.txt", true);
-//		out.write("-------------------------------------------------------------------------------------------------------" + "\n");
-//		out.write(rawChat + "\n");
+		FileWriter out = new FileWriter(logFile, true);
+		out.write("-------------------------------------------------------------------------------------------------------" + "\n");
+		out.write("[Policebot] Raw Chat: " + rawChat + "\n");
 		String rawChatArr[] = rawChat.split("\"");
 //		System.out.println("[PoliceBot] rawChatArr.length = " + rawChatArr.length);
 		for (int x = 0; x < rawChatArr.length; x++)
 		{
-//			out.write("rawChatArr: " + rawChatArr[x] + "\n");
+			out.write("rawChatArr: " + rawChatArr[x] + "\n");
 //			System.out.println("[PoliceBot] x = " + x);
 		}
 		if (Minecraft.getMinecraft().isSingleplayer())
 		{
-//			out.write("Is Singleplayer" + "\n");
-			if (rawChatArr.length > 6)
+			out.write("Is Singleplayer" + "\n");
+			System.out.println("[PoliceBot] " + rawChat);
+			if (rawChatArr.length > 7)
 			{
 				username = rawChatArr[7];
+				username = ((rawChatArr[7].split(":"))[0].replace("From ", ""));
 			}
 			else
 				username = "null";
-			if (rawChatArr.length > 8)
+			if (rawChatArr.length > 9)
 			{
 				message = rawChatArr[9];
 			}
 			else
 				message = "null";
+			loggerUsername = username;
 		}
 		else
 		{
-//			out.write("Is Multiplayer" + "\n");
+			out.write("Is Multiplayer" + "\n");
 			if (rawChatArr.length > 3)
 			{
 				chat =  rawChatArr[3].split(" ");
-				username = chat[0].replace(":", "");
+				for (int x = 0; x < chat.length; x++)
+					if (chat[x].contains(":"))
+					{
+						messageStartPlace = x;
+						break;
+					}
+				username = chat[messageStartPlace].replace(":", "");
+//				username = (userChat[0].replace("From ", ""));
 				username = username.trim();
 				username = stripChat(username);
 				for (int x = 0; x < chat.length; x++)
-//					out.write("chat: " + chat[x] + "\n");
-				
-//				out.write("username: " + username + "\n");
+					out.write("chat: " + chat[x] + "\n");
 				message = "";
-				for (int x = 1; x < chat.length; x++)
+				for (int x = messageStartPlace + 1; x < chat.length; x++)
 				{
 					message = message + " " + chat[x];
 				}
+				if (chat[0].contains("From"))
+					loggerUsername = "From " + username;
+				else
+					loggerUsername = username;
 			}
 		}
 		message = message.trim();
 		message = stripChat(message);
-		
-		chatLogger.write(sdf.format(new java.util.Date()) + "[" + username + "]" + message + "\n");
-//		out.write("message: " + message + "\n");
+		out.write("username: " + username + "\n");
+		chatLogger.write(timeFormat.format(new java.util.Date()) + "[" + loggerUsername + "]" + message + "\n");
+		out.write("message: " + message + "\n");
 		String command[] = message.split(" ");
 		List<String> commandList = new ArrayList<String>();
 		for (String x : message.split(" "))
+		{
 			commandList.add(x);
+//			System.out.println("[PoliceBot] commandList: " + commandList.toString());
+		}
 		//checks to see if the chat message is long enough to fill each command level, and if its not fills it with "null"
 		int cmdtop = 8;
 		for (int cmdlvl = 0; cmdlvl <= cmdtop; cmdlvl++)
@@ -149,14 +196,14 @@ public class PoliceBot
 			if (cmdlvl > commandList.size())
 			{
 				commandList.add("null");
-//				System.out.println("[PoliceBot] commandList: " + commandList);
+//				System.out.println("[PoliceBot] commandList: " + commandList.toString());
 			}
 		}
 //		System.out.println("[PoliceBot] commandList: " + commandList);
 //		System.out.println("[PoliceBot] commandList element 3: " + commandList.get(3));
 		if (commandList.get(0).equalsIgnoreCase(chatID))
 		{
-			if (!botPermBlacklist.contains(username))
+			if (!botPermBlacklist.contains(username.toLowerCase()) && !watchList.contains(username.toLowerCase()))
 			{
 				if (commandList.get(1).equalsIgnoreCase("help"))
 				{
@@ -164,43 +211,13 @@ public class PoliceBot
 				}
 				else if (commandList.get(1).equalsIgnoreCase("alerts"))
 				{
-					if (botPermissions.contains(username))
+					if (botPermissions.contains(username.toLowerCase()))
 					{
 						if (commandList.get(2).equalsIgnoreCase("run"))
 							if (commandList.get(3) != "null" && commandList.get(4) != "null" && commandList.get(5) != "null" && commandList.get(6) != "null")
 								policeBot.AlertManager.wantedAlert(commandList.get(3), commandList.get(4), Integer.parseInt(commandList.get(5)), Integer.parseInt(commandList.get(6)));
 							else
-								policeBot.SendChat.addMessageQueue("[PoliceBot] Error, use command like this: run criminalName crime secondsBetween timesRepeated");
-		/*				else if (commandList.get(2).equalsIgnoreCase("list"))
-						{
-							BufferedReader AlertsReader = new BufferedReader(new FileReader(policeBot.PoliceBot.settingsDir + "\\alerts\\wantedAlerts.txt"));
-							List<String> wantedAlertsList = new ArrayList<String>();
-							String line = null;
-							while ((line = AlertsReader.readLine()) != null)
-							{
-								wantedAlertsList.add(line);
-							}
-							AlertsReader.close();
-							System.out.println("[PoliceBot] Alerts List: " + wantedAlertsList);
-							List<String> wantedAlertsIDList = new ArrayList<String>();
-							for (int i = 0; i < wantedAlertsList.size(); i++)
-							{
-								String temp[] = wantedAlertsList.get(i).split(",");
-								wantedAlertsIDList.add(temp[0]);
-							}
-							System.out.println("[PoliceBot] Alerts ID List: " + wantedAlertsIDList);
-							policeBot.SendChat.addMessageQueue("[PoliceBot] Current alerts: " + wantedAlertsIDList);
-						}
-						else if (commandList.get(2).equalsIgnoreCase("create"))
-						{
-							if (commandList.get(3) != "null" && commandList.get(4) != "null")
-							{
-								policeBot.AlertManager.createAlert(commandList.get(3), commandList.get(4));
-							}
-							else
-								policeBot.SendChat.addMessageQueue("[PoliceBot] Command proper use: create wantedPlayer crime");
-						}
-		*/				
+								policeBot.SendChat.addMessageQueue("[PoliceBot] Error, use command like this: run criminalName crime secondsBetween timesRepeated");				
 						else if (commandList.get(2).equalsIgnoreCase("running"))
 						{
 							System.out.println("[PoliceBot] alertsRunning -" + policeBot.AlertManager.alertsRunning.toString() + "-");
@@ -213,6 +230,7 @@ public class PoliceBot
 							if (commandList.get(3) != "null")
 								if (policeBot.AlertManager.alertsRunning.contains(commandList.get(3)))
 								{
+									SendChat.addMessageQueue("[PoliceBot] Stopping alert " + commandList.get(3));
 									policeBot.AlertManager.alertsRunning.remove(commandList.get(3));
 									detectedList.remove((commandList.get(3).split("_"))[1]);
 								}
@@ -228,17 +246,46 @@ public class PoliceBot
 					else
 						policeBot.SendChat.addMessageQueue("[PoliceBot] Im sorry, " + username + ", you do not have permission to do that");
 				}
+				else if (commandList.get(1).equalsIgnoreCase("announcements"))
+				{
+					if (botPermissions.contains(username))
+					{
+						if (commandList.get(2).equalsIgnoreCase("start"))
+						{
+							if (chat[0].contains("From"))
+								SendChat.addMessageQueue("/r Starting announcements");
+							else
+								SendChat.addMessageQueue("[PoliceBot] Starting announcements");
+							policeBot.AlertManager.announcementsAlert(10, announcementsFile);
+						}
+						else if (commandList.get(2).equalsIgnoreCase("stop"))
+						{
+							if (chat[0].contains("From"))
+								SendChat.addMessageQueue("/r Stopping announcements");
+							else
+								SendChat.addMessageQueue("[PoliceBot] Stopping announcements");
+							AlertManager.runAnnouncements = false;
+						}
+						else
+							if (chat[0].contains("From"))
+								SendChat.addMessageQueue("/r Error, use command like this: announcements start/stop");
+							else
+								SendChat.addMessageQueue("[PoliceBot] Error, use command like this: announcements start/stop");
+					}
+					else
+						SendChat.addMessageQueue("[PoliceBot] Im sorry, " + username + ", you do not have permission to do that");
+				}
 				else if (commandList.get(1).equalsIgnoreCase("city"))
 				{
-					policeBot.SendChat.addMessageQueue("Current government officials: Itaqi-President, ObsidianOverlord-Vice President, King_Devely-Judge");
-					policeBot.SendChat.addMessageQueue("Whohead63-Secretary of Treasury, Konvexon-Police Chief, KwizzleHazzizle-Public Works Director.");
+					policeBot.SendChat.addMessageQueue("Current government officials: Itaqi-President, GTAVisbest-Vice President,");
+					policeBot.SendChat.addMessageQueue("Konvexon-Police Chief, KwizzleHazzizle-Public Works Director.");
 					policeBot.SendChat.addMessageQueue("Elections are held every 15th. Buy a plot for 4d from any government official. ");
 					policeBot.SendChat.addMessageQueue("Make sure to visit /r/civcraft_orion. Thank you for visiting Orion " + username + "!");
 				}
 				else if (commandList.get(1).equalsIgnoreCase("credits"))
 				{
 					policeBot.SendChat.addMessageQueue("[PoliceBot] Coded by baconater88 with the help of Murder_is_Tasty for the city of Orion.");
-					policeBot.SendChat.addMessageQueue("[PoliceBot] Version 0.4");
+					policeBot.SendChat.addMessageQueue("[PoliceBot] Version 1.0");
 				}
 				else if (commandList.get(1).equalsIgnoreCase("permissions"))
 					policeBot.SendChat.addMessageQueue("[PoliceBot] Permissions: " + botPermissions.toString().replace("[", "").replace("]", ""));
@@ -309,9 +356,9 @@ public class PoliceBot
 					policeBot.SendChat.addMessageQueue("[PoliceBot] Im sorry, " + username + ", that command does not exist. Try help");
 			}
 			else
-				policeBot.SendChat.addMessageQueue("[PoliceBot] Im sorry, " + username + ", you have been blacklisted");
+				policeBot.SendChat.addMessageQueue("/msg " + username + " [PoliceBot] Im sorry, you have been blacklisted");
 		}
-		else if (commandList.get(0).equals("*"))
+		else if (commandList.get(0).equals("*") && commandList.get(2).equalsIgnoreCase("entered"))
 		{
 			System.out.println("[PoliceBot] Is snitch alert");
 			if (Integer.parseInt(commandList.get(6).replace("[", "").replace("]", "")) <= -4000 && Integer.parseInt(commandList.get(6).replace("[", "").replace("]", "")) >= -6000 && Integer.parseInt(commandList.get(8).replace("[", "").replace("]", "")) <= -4000 && Integer.parseInt(commandList.get(8).replace("[", "").replace("]", "")) >= -6000)
@@ -323,7 +370,7 @@ public class PoliceBot
 				AlertsReader.close();
 				System.out.println("[PoliceBot] Watchlist: " + watchList.toString());
 				System.out.println("[PoliceBot] Detected List: " + detectedList.toString());
-				if (watchList.contains(commandList.get(1)))
+				if (watchList.contains(commandList.get(1).toLowerCase()))
 				{
 					if (!detectedList.contains(commandList.get(1)))
 					{
@@ -349,7 +396,7 @@ public class PoliceBot
 				}
 			}
 		}
-//		out.close();
+		out.close();
 		chatLogger.close();
 	}
 	

@@ -1,17 +1,26 @@
 package policeBot;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 
 public class AlertManager 
 {
 	static List<String> alertsRunning = new ArrayList<String>();
+	static List<String> announcementsList = new ArrayList<String>();
+	static List<Integer> usedAnnouncements = new ArrayList<Integer>();
 	static TimerTask alertTask;
+	static String line;
+	static boolean runAnnouncements = false;
+	static int randInt;
 	
 	static void createAlert(String alertPerp, String alertCrime) throws Exception
 	{
@@ -110,8 +119,54 @@ public class AlertManager
 		}, 0, minBetween * 60 * 1000);
 	}
 	
-	void stopAlert()
+	static void announcementsAlert(int alertSpacing, final File announcementsFile) throws Exception
 	{
-		
+		runAnnouncements = true;
+		final Timer announcementTimer = new Timer();
+		announcementTimer.scheduleAtFixedRate(new TimerTask()
+		{
+			@Override
+			public void run()
+			{
+				if (runAnnouncements)
+				{
+					BufferedReader announcementReader = null;
+					try
+					{
+						announcementReader = new BufferedReader(new FileReader(announcementsFile));
+					} 
+					catch (FileNotFoundException e)
+					{
+						e.printStackTrace();
+					}
+					try
+					{
+						while ((line = announcementReader.readLine()) != null)
+							if (!announcementsList.contains(line))
+								announcementsList.add(line);
+						announcementReader.close();
+					}
+					catch (IOException e)
+					{
+						e.printStackTrace();
+					}
+					if (usedAnnouncements.size() == announcementsList.size())
+						usedAnnouncements.clear();
+					Random randomGen = new Random();
+					do
+						randInt = randomGen.nextInt(announcementsList.size());
+					while (usedAnnouncements.contains(randInt));
+					usedAnnouncements.add(randInt);
+					System.out.println("[PoliceBot] Random Int: " + randInt);
+					System.out.println("[PoliceBot] Used Announcements : " + usedAnnouncements.toString());
+					policeBot.SendChat.addMessageQueue(announcementsList.get(randInt));
+				}
+				else
+				{
+					announcementTimer.cancel();
+					announcementTimer.purge();
+				}
+			}
+		}, 0, alertSpacing * 60 * 1000);
 	}
 }
